@@ -20,9 +20,6 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
-      .glow-emerald {
-        box-shadow: 0 0 30px rgba(16, 185, 129, 0.15);
-      }
       input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
@@ -46,6 +43,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- 依赖由 Vite 通过 package.json 自动管理，不再使用 importmap -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
