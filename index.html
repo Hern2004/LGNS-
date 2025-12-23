@@ -26,6 +26,11 @@
       input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+      
+      /* 修复图表在极端尺寸下的显示问题 */
+      .recharts-responsive-container {
+        min-height: 300px;
+      }
     </style>
   <script type="importmap">
 {
@@ -42,7 +47,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- Vite 入口，依赖将自动打包，不再受 esm.sh 限制 -->
+    <!-- Vite 入口，系统会自动解析 package.json 中的依赖 -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
