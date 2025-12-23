@@ -1,45 +1,35 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, Line, ComposedChart } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ComposedChart } from 'recharts';
 import { fetchCurrentPrice, fetchHistoricalData } from './services/api';
 import { PriceData, TokenStats } from './types';
 import { DEFAULT_TOKEN_ADDRESS, DEFAULT_PLATFORM_ID, DEFAULT_ANNUAL_YIELD } from './constants';
 
 const App: React.FC = () => {
-  // 核心状态
   const [investment, setInvestment] = useState<number>(1000);
   const [annualYield, setAnnualYield] = useState<number>(DEFAULT_ANNUAL_YIELD);
   const [tokenAddress, setTokenAddress] = useState<string>(DEFAULT_TOKEN_ADDRESS);
   const [startDate, setStartDate] = useState<string>(
-    new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   
   const [stats, setStats] = useState<TokenStats | null>(null);
   const [historicalPrices, setHistoricalPrices] = useState<PriceData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // 日复利利率计算: (1 + r)^365 = 1 + AnnualYield
   const dailyYieldRate = useMemo(() => Math.pow(1 + annualYield / 100, 1 / 365) - 1, [annualYield]);
 
   const loadData = async () => {
     setRefreshing(true);
-    setError(null);
     try {
       const [currentStats, history] = await Promise.all([
         fetchCurrentPrice(tokenAddress),
         fetchHistoricalData(DEFAULT_PLATFORM_ID, tokenAddress)
       ]);
-      
       setStats(currentStats);
       setHistoricalPrices(history);
-      
-      if (history.length === 0) {
-        setError("无法从公开节点获取 K 线，可能是由于合约在 DEX 上的流动性较新。");
-      }
     } catch (err) {
-      setError("节点响应超时，请尝试刷新。");
+      console.error("Node error:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -48,27 +38,27 @@ const App: React.FC = () => {
 
   useEffect(() => { loadData(); }, [tokenAddress]);
 
-  // 计算每日资产路径
   const results = useMemo(() => {
     if (!historicalPrices.length) return [];
-    
     const startTimestamp = new Date(startDate).setHours(0, 0, 0, 0);
     const relevantPrices = historicalPrices.filter(p => p.timestamp >= startTimestamp);
-    
     if (relevantPrices.length === 0) return [];
 
     const initialPrice = relevantPrices[0].price;
     const initialTokens = investment / initialPrice;
     
     return relevantPrices.map((point, index) => {
-      // 每一天都在前一天的基础上增加币数 (日复利)
       const currentTokens = initialTokens * Math.pow(1 + dailyYieldRate, index);
+      // Create a Date object once to avoid multiple new Date() calls
+      const dateObj = new Date(point.timestamp);
       return {
-        date: new Date(point.timestamp).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }),
+        // Fix: Manually format to MM-dd to avoid invalid toLocaleDateString options
+        date: `${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`,
+        fullDate: dateObj.toLocaleDateString('zh-CN'),
         price: point.price,
         tokenBalance: currentTokens,
         usdValue: currentTokens * point.price,
-        timestamp: point.timestamp
+        multiplier: currentTokens / initialTokens
       };
     });
   }, [historicalPrices, investment, startDate, dailyYieldRate]);
@@ -76,168 +66,183 @@ const App: React.FC = () => {
   const summary = useMemo(() => {
     if (!results.length) return null;
     const last = results[results.length - 1];
-    const finalValue = last.usdValue;
-
     return {
-      totalUsdValue: finalValue,
+      totalUsdValue: last.usdValue,
       totalTokens: last.tokenBalance,
-      netProfitUsd: finalValue - investment,
-      totalRoiPercent: ((finalValue - investment) / investment) * 100,
+      netProfitUsd: last.usdValue - investment,
+      totalRoiPercent: ((last.usdValue - investment) / investment) * 100,
+      multiplier: last.multiplier,
+      dailyEst: last.usdValue * dailyYieldRate
     };
-  }, [results, investment]);
+  }, [results, investment, dailyYieldRate]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#05080f] text-emerald-500">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 border-4 border-emerald-500/10 border-t-emerald-500 rounded-full animate-spin mx-auto"></div>
-          <p className="font-bold tracking-widest animate-pulse">正在穿透全球 CDN 建立稳定连接...</p>
+      <div className="flex items-center justify-center min-h-screen bg-[#020617]">
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 border-b-2 border-emerald-500 rounded-full animate-spin"></div>
+          <p className="mt-6 text-emerald-500/80 font-mono text-sm tracking-widest animate-pulse uppercase">Syncing Node...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#05080f] text-slate-200 font-sans p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#020617] text-slate-300 p-3 md:p-8 selection:bg-emerald-500/30">
+      <div className="max-w-7xl mx-auto space-y-5">
         
-        {/* Top Header */}
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="flex-1 bg-gradient-to-br from-slate-900 to-slate-950 p-6 rounded-[2rem] border border-slate-800/50 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-slate-950 font-black text-2xl shadow-[0_0_30px_rgba(16,185,129,0.3)]">L</div>
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">LGNS 计算器 <span className="text-emerald-500 text-sm ml-2 font-medium bg-emerald-500/10 px-2 py-0.5 rounded">Stable V2</span></h1>
-                <p className="text-[10px] text-slate-500 font-mono mt-1 opacity-80">{tokenAddress}</p>
-              </div>
+        {/* Top Navigation / Stats Bar */}
+        <header className="glass rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <span className="text-slate-950 font-black text-2xl">L</span>
             </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">DEX 实测现价</p>
-              <p className="text-3xl font-black text-emerald-400 font-mono tracking-tighter">
-                ${stats?.currentPrice.toFixed(4) || "0.0000"}
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight">LGNS <span className="text-emerald-500">PRO</span></h1>
+              <p className="text-[10px] text-emerald-500/60 font-mono uppercase tracking-widest">OKX Fast-Node Connected</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="text-center md:text-right">
+              <p className="text-[9px] text-slate-500 uppercase font-black">Current Price (DEX)</p>
+              <p className="text-2xl font-mono font-bold text-emerald-400 tracking-tighter">
+                ${stats?.currentPrice.toFixed(4) || "---"}
               </p>
             </div>
-          </div>
-          
-          <div className="md:w-64 bg-slate-900/50 p-4 rounded-[2rem] border border-slate-800/50 flex flex-col justify-center gap-2">
             <button 
-              onClick={loadData} 
-              disabled={refreshing}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2"
+              onClick={loadData}
+              className="p-3 glass rounded-2xl hover:bg-slate-800 transition-colors group"
+              title="Refresh Data"
             >
-              {refreshing ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : "同步最新数据"}
+              <svg className={`w-5 h-5 text-slate-400 group-hover:text-white ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
             </button>
-            <div className="flex items-center justify-center gap-2 text-[9px] text-slate-500 font-bold uppercase">
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-              免 VPN 节点已就绪
-            </div>
           </div>
-        </div>
+        </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Settings Sidebar */}
-          <aside className="lg:col-span-4 space-y-6">
-            <div className="bg-slate-900/40 border border-slate-800/50 p-6 rounded-[2.5rem] backdrop-blur-xl">
-              <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                <span className="w-1 h-3 bg-emerald-500 rounded-full"></span> 投资策略设定
-              </h2>
-              
-              <div className="space-y-6">
-                <div className="group">
-                  <label className="text-[10px] text-slate-500 font-black uppercase mb-2 block group-focus-within:text-emerald-500 transition-colors">初始本金 (USDT)</label>
-                  <input 
-                    type="number" 
-                    value={investment} 
-                    onChange={(e) => setInvestment(Number(e.target.value))}
-                    className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-4 font-mono text-xl text-white outline-none focus:border-emerald-500/40 transition-all shadow-inner"
-                  />
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          
+          {/* Controls Sidebar */}
+          <aside className="lg:col-span-3 space-y-5">
+            <div className="glass rounded-[2rem] p-6 space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Simulator Config</h2>
+              </div>
+
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Principal (USDT)</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      value={investment} 
+                      onChange={(e) => setInvestment(Number(e.target.value))}
+                      className="w-full bg-slate-900/50 rounded-2xl px-4 py-3 font-mono text-lg text-white border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 outline-none transition-all"
+                    />
+                    <span className="absolute right-4 top-3.5 text-[10px] text-slate-600 font-bold">USD</span>
+                  </div>
                 </div>
 
-                <div className="group">
-                  <label className="text-[10px] text-slate-500 font-black uppercase mb-2 block group-focus-within:text-cyan-500 transition-colors">设定币本位年化 (APR %)</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Target APR (%)</label>
                   <div className="relative">
                     <input 
                       type="number" 
                       value={annualYield} 
                       onChange={(e) => setAnnualYield(Number(e.target.value))}
-                      className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-4 font-mono text-xl text-cyan-400 outline-none focus:border-cyan-500/40 transition-all"
+                      className="w-full bg-slate-900/50 rounded-2xl px-4 py-3 font-mono text-lg text-emerald-400 border border-slate-800 focus:border-emerald-500/50 outline-none transition-all"
                     />
-                    <span className="absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500/50 font-black">%</span>
+                    <span className="absolute right-4 top-3.5 text-[10px] text-emerald-900 font-bold">%</span>
                   </div>
                 </div>
 
-                <div className="group">
-                  <label className="text-[10px] text-slate-500 font-black uppercase mb-2 block group-focus-within:text-emerald-500 transition-colors">回测买入日期</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Start From</label>
                   <input 
                     type="date" 
                     value={startDate} 
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-slate-950/50 border border-slate-800 rounded-2xl px-5 py-4 font-mono text-white outline-none focus:border-emerald-500/40 transition-all"
+                    className="w-full bg-slate-900/50 rounded-2xl px-4 py-3 font-mono text-sm text-slate-300 border border-slate-800 focus:border-emerald-500/50 outline-none transition-all"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-6 bg-gradient-to-br from-indigo-500/5 to-emerald-500/5 border border-white/5 rounded-[2.5rem]">
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                <strong className="text-emerald-500 block mb-1">💡 算法提示：</strong>
-                本程序基于每日复利算法进行模拟。在高年化设定下，持有天数对最终收益的影响呈指数级增长。数据每 30 秒从全球主节点同步一次。
+            <div className="p-6 rounded-[2rem] bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/10 relative overflow-hidden group">
+              <div className="absolute -right-2 -bottom-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M13 2.05v2.02c4.39.54 7.5 4.53 6.96 8.92-.46 3.73-3.23 6.5-6.96 6.96v2.02c5.5-.55 9.5-5.31 8.95-10.81-.46-4.63-4.13-8.29-8.76-8.76zM11 2.05c-5.05.5-9.14 4.59-9.64 9.64H11V2.05zM2.31 13c.5 5.05 4.59 9.14 9.64 9.64V13H2.31z"/></svg>
+              </div>
+              <p className="text-[11px] leading-relaxed text-slate-400 relative z-10">
+                <strong className="text-emerald-500 font-black block mb-1">复利模型说明</strong>
+                该模型模拟每日收益自动复投。1000% APR 意味着每日增长约 <span className="text-white">0.66%</span>。高复利在长期持有中能极大对冲币价波动的负面影响。
               </p>
             </div>
           </aside>
 
-          {/* Main Content Area */}
-          <section className="lg:col-span-8 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-800/50">
-                <p className="text-[10px] text-slate-500 font-black uppercase mb-2">预估总资产 (USDT)</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-emerald-400 tracking-tighter">
-                    ${summary?.totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          {/* Visualization & Stats */}
+          <main className="lg:col-span-9 space-y-5">
+            
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="glass rounded-[2rem] p-5 shadow-lg glow-emerald">
+                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Total Assets</p>
+                <p className="text-xl md:text-2xl font-mono font-bold text-white tracking-tighter">
+                  ${summary?.totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+              <div className="glass rounded-[2rem] p-5 shadow-lg">
+                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Net Profit</p>
+                <p className={`text-xl md:text-2xl font-mono font-bold tracking-tighter ${summary?.netProfitUsd! >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                  {summary?.netProfitUsd! >= 0 ? '+' : ''}{summary?.netProfitUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+              <div className="glass rounded-[2rem] p-5 shadow-lg">
+                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Token Multiplier</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl md:text-2xl font-mono font-bold text-cyan-400 tracking-tighter">
+                    {summary?.multiplier.toFixed(2)}x
                   </span>
+                  <span className="text-[9px] text-slate-600 font-black bg-slate-800 px-1.5 py-0.5 rounded">AUTO</span>
                 </div>
               </div>
-              <div className="bg-slate-900/40 p-6 rounded-[2.5rem] border border-slate-800/50">
-                <p className="text-[10px] text-slate-500 font-black uppercase mb-2">回测净利润 / ROI</p>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-4xl font-black tracking-tighter ${summary?.netProfitUsd! >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                    ${summary?.netProfitUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-xs font-bold text-slate-500">({summary?.totalRoiPercent.toFixed(1)}%)</span>
-                </div>
+              <div className="glass rounded-[2rem] p-5 shadow-lg">
+                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Daily Earnings</p>
+                <p className="text-xl md:text-2xl font-mono font-bold text-emerald-500 tracking-tighter">
+                  +${summary?.dailyEst.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </p>
               </div>
             </div>
 
-            {/* Composed Chart */}
-            <div className="bg-slate-900/40 p-8 rounded-[3rem] border border-slate-800/50 h-[500px] flex flex-col">
-              <div className="flex items-center justify-between mb-8">
+            {/* Main Chart */}
+            <div className="glass rounded-[2.5rem] p-6 md:p-8 h-[500px] shadow-2xl relative">
+              <div className="flex items-center justify-between absolute top-8 left-8 right-8 z-10 pointer-events-none">
                 <div>
-                  <h3 className="text-sm font-black text-white uppercase">复利本息 vs 币价波动</h3>
-                  <p className="text-[10px] text-slate-500 font-bold mt-1">混合 K 线分析模型 (GeckoTerminal 实时同步)</p>
+                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Growth Forecast</h3>
+                  <p className="text-[10px] text-slate-500 mt-1 font-mono">Performance over selected timeframe</p>
                 </div>
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                    <span className="text-[9px] font-black text-slate-400">总价值</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 border-2 border-indigo-500 rounded-full"></div>
-                    <span className="text-[9px] font-black text-slate-400">币价</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-[9px] text-slate-400 uppercase font-black">USD Value</span>
                   </div>
                 </div>
               </div>
-
-              <div className="flex-1 w-full">
+              
+              <div className="w-full h-full pt-16">
                 {results.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={results}>
                       <defs>
-                        <linearGradient id="valGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.3}/>
+                        <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.15}/>
                           <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                      <CartesianGrid strokeDasharray="1 6" stroke="#1e293b" vertical={false} />
                       <XAxis 
                         dataKey="date" 
                         stroke="#475569" 
@@ -245,90 +250,71 @@ const App: React.FC = () => {
                         axisLine={false} 
                         tickLine={false} 
                         minTickGap={40}
+                        dy={10}
                       />
                       <YAxis 
-                        yAxisId="left" 
                         stroke="#10b981" 
                         fontSize={10} 
                         axisLine={false} 
                         tickLine={false} 
-                        tickFormatter={(v) => `$${v}`}
-                      />
-                      <YAxis 
-                        yAxisId="right" 
-                        orientation="right" 
-                        stroke="#6366f1" 
-                        fontSize={10} 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tickFormatter={(v) => `$${v}`}
+                        tickFormatter={(v) => `$${v > 1000 ? (v/1000).toFixed(0)+'k' : v}`}
+                        width={40}
                       />
                       <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#0f172a', 
-                          border: '1px solid #334155', 
-                          borderRadius: '20px', 
-                          fontSize: '11px',
-                          boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)'
-                        }} 
-                        cursor={{ stroke: '#334155', strokeWidth: 2 }}
+                        cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '4 4' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const d = payload[0].payload;
+                            return (
+                              <div className="glass !bg-slate-950/90 border border-emerald-500/20 p-4 rounded-2xl shadow-2xl">
+                                <p className="text-[10px] text-slate-500 font-black mb-2 uppercase">{d.fullDate}</p>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between gap-8">
+                                    <span className="text-[10px] text-slate-400 uppercase">Value:</span>
+                                    <span className="text-xs font-mono font-bold text-white">${d.usdValue.toFixed(2)}</span>
+                                  </div>
+                                  <div className="flex justify-between gap-8">
+                                    <span className="text-[10px] text-slate-400 uppercase">Balance:</span>
+                                    <span className="text-xs font-mono font-bold text-emerald-400">{d.tokenBalance.toFixed(0)}</span>
+                                  </div>
+                                  <div className="flex justify-between gap-8">
+                                    <span className="text-[10px] text-slate-400 uppercase">Multiplier:</span>
+                                    <span className="text-xs font-mono font-bold text-cyan-400">{d.multiplier.toFixed(2)}x</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
                       />
                       <Area 
-                        yAxisId="left" 
                         type="monotone" 
                         dataKey="usdValue" 
                         stroke="#10b981" 
                         strokeWidth={4} 
-                        fill="url(#valGrad)" 
-                      />
-                      <Line 
-                        yAxisId="right" 
-                        type="monotone" 
-                        dataKey="price" 
-                        stroke="#6366f1" 
-                        strokeWidth={2} 
-                        dot={false} 
-                        strokeDasharray="5 5"
+                        fill="url(#areaFill)" 
+                        animationDuration={1500}
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950/50 rounded-[2rem] border-2 border-dashed border-slate-800">
-                    <p className="text-slate-600 font-black text-xs uppercase tracking-widest">{error || "正在解析 K 线数据数据流..."}</p>
+                  <div className="h-full w-full flex flex-col items-center justify-center opacity-50">
+                    <div className="w-10 h-10 border-t-2 border-slate-700 rounded-full animate-spin mb-4"></div>
+                    <p className="text-slate-600 font-black text-[10px] uppercase tracking-[0.4em]">Optimizing Nodes...</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Stats Table */}
-            <div className="bg-slate-900/40 border border-slate-800/50 rounded-[2.5rem] overflow-hidden">
-              <div className="p-6 border-b border-slate-800/50 flex justify-between items-center">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">每日回测明细表 (日复利)</h4>
-              </div>
-              <div className="max-h-64 overflow-y-auto scrollbar-hide">
-                <table className="w-full text-left font-mono text-[11px]">
-                  <thead className="sticky top-0 bg-[#0a0f1d] text-slate-500 z-10 shadow-sm">
-                    <tr>
-                      <th className="px-6 py-4">日期</th>
-                      <th className="px-6 py-4">币价 (DEX)</th>
-                      <th className="px-6 py-4">持有量 (复合)</th>
-                      <th className="px-6 py-4 text-right">总估值</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/30">
-                    {[...results].reverse().map((row, i) => (
-                      <tr key={i} className="hover:bg-emerald-500/5 transition-colors group">
-                        <td className="px-6 py-4 text-slate-400">{row.date}</td>
-                        <td className="px-6 py-4 text-indigo-400 font-bold">${row.price.toFixed(4)}</td>
-                        <td className="px-6 py-4 text-slate-300">{row.tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} LGNS</td>
-                        <td className="px-6 py-4 text-right text-emerald-400 font-black">${row.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
+            {/* Footer / Disclaimer */}
+            <footer className="text-center py-4">
+              <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+                Data provided by OKX DEX Aggregator • Charts via Recharts v3
+              </p>
+            </footer>
+
+          </main>
         </div>
       </div>
     </div>

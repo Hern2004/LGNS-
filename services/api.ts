@@ -1,39 +1,40 @@
 
-import { DEX_SCREENER_API_BASE, GECKO_TERMINAL_API_BASE } from '../constants';
+import { OKX_DEX_API_BASE, GECKO_TERMINAL_API_BASE, OKX_CHAIN_ID } from '../constants';
 import { PriceData, TokenStats } from '../types';
 
 /**
- * 通过 DexScreener 获取实时价格（国内访问最稳定）
+ * 通过 OKX DEX 接口获取实时价格 (国内最快、最稳定)
  */
 export const fetchCurrentPrice = async (address: string): Promise<TokenStats> => {
   try {
-    const url = `${DEX_SCREENER_API_BASE}/${address}`;
+    // OKX 的这个接口专为前端聚合器设计，国内访问延迟极低
+    const url = `${OKX_DEX_API_BASE}?chainId=${OKX_CHAIN_ID}&tokenAddress=${address}`;
     const response = await fetch(url);
-    if (!response.ok) throw new Error("DexScreener API Offline");
+    if (!response.ok) throw new Error("OKX API Offline");
     
     const json = await response.json();
-    const pair = json.pairs?.[0]; // 取流动性最大的交易对
+    const data = json.data;
 
-    if (!pair) throw new Error("No active liquidity pairs found");
+    if (!data) throw new Error("Token not found on OKX DEX");
 
     return {
-      currentPrice: parseFloat(pair.priceUsd) || 0,
-      priceChange24h: parseFloat(pair.priceChange?.h24) ?? 0,
-      marketCap: parseFloat(pair.fdv) ?? 0,
-      volume24h: parseFloat(pair.volume?.h24) ?? 0,
+      currentPrice: parseFloat(data.priceUsd) || 0,
+      priceChange24h: parseFloat(data.priceChange24h) ?? 0,
+      marketCap: parseFloat(data.fdv) ?? 0,
+      volume24h: parseFloat(data.volume24h) ?? 0,
     };
   } catch (error) {
-    console.error("DexScreener Fetch Error:", error);
+    console.warn("OKX Fetch Error, trying fallback:", error);
+    // 如果 OKX 出错，返回默认空值，App.tsx 会有处理逻辑
     return { currentPrice: 0, priceChange24h: 0, marketCap: 0, volume24h: 0 };
   }
 };
 
 /**
- * 获取历史 OHLCV 数据（使用 GeckoTerminal 节点）
+ * 获取历史 OHLCV 数据 (回测专用)
  */
 export const fetchHistoricalData = async (platform: string, address: string): Promise<PriceData[]> => {
   try {
-    // 1. 获取该代币的流动性池地址
     const poolsUrl = `${GECKO_TERMINAL_API_BASE}/networks/${platform}/tokens/${address}/pools`;
     const poolsResponse = await fetch(poolsUrl);
     if (!poolsResponse.ok) return [];
@@ -43,8 +44,6 @@ export const fetchHistoricalData = async (platform: string, address: string): Pr
     if (!topPool) return [];
 
     const poolAddress = topPool.attributes.address;
-
-    // 2. 获取该池子的历史数据
     const historyUrl = `${GECKO_TERMINAL_API_BASE}/networks/${platform}/pools/${poolAddress}/ohlcv/day?limit=365`;
     const response = await fetch(historyUrl);
     if (!response.ok) return [];
@@ -52,14 +51,13 @@ export const fetchHistoricalData = async (platform: string, address: string): Pr
     const data = await response.json();
     const ohlcvList = data.data.attributes.ohlcv_list;
 
-    // 提取收盘价并按时间升序排列
     return ohlcvList.map((item: any) => ({
       timestamp: item[0] * 1000,
       price: parseFloat(item[4]),
     })).sort((a: any, b: any) => a.timestamp - b.timestamp);
     
   } catch (error) {
-    console.error("Historical Data Fetch Error:", error);
+    console.error("Historical Data Error:", error);
     return [];
   }
 };
