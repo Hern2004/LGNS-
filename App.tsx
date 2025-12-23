@@ -28,12 +28,16 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
+  // 安全的数值计算
+  const safeInvestment = useMemo(() => isNaN(investment) ? 0 : investment, [investment]);
+  const safeYield = useMemo(() => isNaN(annualYield) ? 0 : annualYield, [annualYield]);
+
   // 计算日利率 (日复利模型)
   const dailyYieldRate = useMemo(() => {
-    return Math.pow(1 + annualYield / 100, 1 / 365) - 1;
-  }, [annualYield]);
+    return Math.pow(1 + safeYield / 100, 1 / 365) - 1;
+  }, [safeYield]);
 
-  // 获取数据的核心方法
+  // 核心方法：同步市场数据
   const syncMarketData = async () => {
     setRefreshing(true);
     setError(null);
@@ -47,35 +51,33 @@ const App: React.FC = () => {
       setHistoricalPrices(history);
       
       if (history.length === 0) {
-        setError("无法从 DEX 调取历史 K 线。请确认代币流动性正常。");
+        setError("无法从 DEX 调取历史数据，请检查代币地址。");
       }
     } catch (err) {
       console.error("Sync Error:", err);
-      setError("API 响应异常，请点击下方按钮重试。");
+      setError("网络超时，请重试。");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // 初始进入页面自动加载
   useEffect(() => {
     syncMarketData();
   }, []);
 
-  // 生成图表数据 - 确保高度响应
+  // 生成投影数据：高度响应用户输入变化
   const results = useMemo(() => {
     if (!historicalPrices.length) return [];
     
-    // 解析用户选定的开始时间（设置为当天 0 点）
-    const startPoint = new Date(startDate);
-    startPoint.setHours(0, 0, 0, 0);
-    const startTimestamp = startPoint.getTime();
+    // 解析起始日期，确保跨时区兼容
+    const startParts = startDate.split('-').map(Number);
+    const startTimestamp = new Date(startParts[0], startParts[1] - 1, startParts[2]).getTime();
 
     // 过滤价格数据
     let filtered = historicalPrices.filter(p => p.timestamp >= startTimestamp);
     
-    // 鲁棒性修复：如果选定日期超出了 API 提供的 180 天范围，则使用最早的一天作为起点
+    // 如果日期太早，自动回滚到有数据的最早日期
     if (filtered.length === 0) {
       filtered = historicalPrices;
     }
@@ -83,11 +85,10 @@ const App: React.FC = () => {
     const basePrice = filtered[0]?.price || stats?.currentPrice || 0;
     if (basePrice === 0) return [];
 
-    const initialTokenAmount = investment / basePrice;
+    const initialTokenAmount = safeInvestment / basePrice;
     
-    // 按时间顺序计算复利增值
     return filtered.map((point, index) => {
-      // 复利后的币数 = 初始币数 * (1 + 日利率)^天数
+      // 复利计算：P * (1 + r)^n
       const compoundedTokens = initialTokenAmount * Math.pow(1 + dailyYieldRate, index);
       const dateObj = new Date(point.timestamp);
       
@@ -99,26 +100,26 @@ const App: React.FC = () => {
         multiplier: compoundedTokens / initialTokenAmount
       };
     });
-  }, [historicalPrices, investment, startDate, dailyYieldRate, stats]);
+  }, [historicalPrices, safeInvestment, startDate, dailyYieldRate, stats]);
 
-  // 数据总览计算
+  // 计算总结
   const summary = useMemo(() => {
     if (!results.length) return null;
     const lastPoint = results[results.length - 1];
     return {
       totalValue: lastPoint.usdValue,
-      profit: lastPoint.usdValue - investment,
+      profit: lastPoint.usdValue - safeInvestment,
       multiplier: lastPoint.multiplier,
       dailyEst: lastPoint.usdValue * dailyYieldRate
     };
-  }, [results, investment, dailyYieldRate]);
+  }, [results, safeInvestment, dailyYieldRate]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#020617]">
         <div className="flex flex-col items-center">
-          <div className="w-12 h-12 border-4 border-emerald-500/10 border-t-emerald-500 rounded-full animate-spin"></div>
-          <p className="mt-4 text-emerald-500 font-mono text-xs tracking-widest uppercase">Initializing Pro Engine...</p>
+          <div className="w-10 h-10 border-2 border-emerald-500/10 border-t-emerald-500 rounded-full animate-spin"></div>
+          <p className="mt-4 text-emerald-500/60 font-mono text-[10px] tracking-widest uppercase">Initializing Interface...</p>
         </div>
       </div>
     );
@@ -128,71 +129,69 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#020617] text-slate-300 p-4 md:p-10 selection:bg-emerald-500/30">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* Top Navigation */}
-        <header className="glass rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/5 shadow-2xl">
+        {/* Header */}
+        <header className="glass rounded-[2.5rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/5 shadow-2xl">
           <div className="flex items-center gap-5">
-            <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <div className="w-14 h-14 bg-emerald-500 rounded-3xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
               <span className="text-slate-950 font-black text-3xl">L</span>
             </div>
             <div>
-              <h1 className="text-2xl font-black text-white uppercase tracking-tight">LGNS Calculator Pro</h1>
+              <h1 className="text-2xl font-black text-white uppercase tracking-tight">LGNS Pro</h1>
               <div className="flex items-center gap-2 mt-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[10px] text-slate-500 font-mono uppercase tracking-[0.2em]">Real-time Market Sync</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[10px] text-slate-500 font-mono tracking-widest uppercase">Polygon Mainnet Active</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 p-4 rounded-2xl border border-white/5 flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Live Market Price</p>
-              <p className="text-3xl font-mono font-bold text-emerald-400">
-                ${stats?.currentPrice.toFixed(4) || "0.0000"}
-              </p>
-            </div>
+          <div className="bg-slate-950/50 p-4 px-6 rounded-2xl border border-white/5">
+            <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest mb-1">Current LGNS/USDT</p>
+            <p className="text-3xl font-mono font-bold text-emerald-400">
+              ${stats?.currentPrice.toFixed(4) || "0.0000"}
+            </p>
           </div>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
-          {/* Controls Sidebar */}
+          {/* Controls */}
           <aside className="lg:col-span-1 space-y-6">
-            <div className="glass rounded-[2.5rem] p-7 space-y-7 border border-white/5 shadow-xl">
-              <div className="space-y-6">
-                <div className="space-y-2.5">
-                  <label className="text-[11px] text-slate-500 font-black uppercase tracking-widest ml-1">初始投入 (USDT)</label>
+            <div className="glass rounded-[2.5rem] p-8 space-y-6 border border-white/5 shadow-xl">
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">初始投入 (USDT)</label>
                   <input 
                     type="number" 
                     value={investment} 
-                    onChange={(e) => setInvestment(Number(e.target.value))}
-                    className="w-full bg-slate-950/50 rounded-2xl px-5 py-4 font-mono text-xl text-white border border-white/10 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                    onChange={(e) => setInvestment(parseFloat(e.target.value))}
+                    className="w-full bg-slate-900/40 rounded-xl px-4 py-3.5 font-mono text-xl text-white border border-white/5 focus:border-emerald-500/50 outline-none transition-all"
                   />
                 </div>
 
-                <div className="space-y-2.5">
-                  <label className="text-[11px] text-slate-500 font-black uppercase tracking-widest ml-1">币本位年化 (APR %)</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">预期年化 (APR %)</label>
                   <input 
                     type="number" 
                     value={annualYield} 
-                    onChange={(e) => setAnnualYield(Number(e.target.value))}
-                    className="w-full bg-slate-950/50 rounded-2xl px-5 py-4 font-mono text-xl text-emerald-400 border border-white/10 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                    onChange={(e) => setAnnualYield(parseFloat(e.target.value))}
+                    className="w-full bg-slate-900/40 rounded-xl px-4 py-3.5 font-mono text-xl text-emerald-400 border border-white/5 focus:border-emerald-500/50 outline-none"
                   />
                 </div>
 
-                <div className="space-y-2.5">
-                  <label className="text-[11px] text-slate-500 font-black uppercase tracking-widest ml-1">起始统计日期</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">投资起始日期</label>
                   <input 
                     type="date" 
                     value={startDate} 
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-slate-950/50 rounded-2xl px-5 py-4 font-mono text-sm text-slate-300 border border-white/10 focus:border-emerald-500 outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-900/40 rounded-xl px-4 py-3.5 font-mono text-sm text-slate-300 border border-white/5 focus:border-emerald-500/50 outline-none"
                   />
                 </div>
 
                 <button 
                   onClick={syncMarketData}
                   disabled={refreshing}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-[0.97] disabled:opacity-50 text-slate-950 font-black py-5 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-3 mt-4"
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black py-4.5 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-3 mt-4"
                 >
                   {refreshing ? (
                     <div className="w-5 h-5 border-2 border-slate-950/20 border-t-slate-950 rounded-full animate-spin"></div>
@@ -201,32 +200,32 @@ const App: React.FC = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   )}
-                  <span className="uppercase tracking-widest text-sm">强制同步 K 线</span>
+                  <span className="uppercase tracking-widest text-sm">强制刷新数据</span>
                 </button>
               </div>
             </div>
 
-            <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 backdrop-blur-sm">
-              <h4 className="text-[10px] text-emerald-500 font-black uppercase mb-2 tracking-[0.2em]">智能引擎运行中</h4>
+            <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10">
               <p className="text-[10px] leading-relaxed text-slate-500 font-medium">
-                修改上方参数后，收益 K 线会自动计算并即时重绘。点击“强制同步”将更新最新的 DEX 市场成交价格。
+                <span className="text-emerald-500 font-black block mb-1 uppercase tracking-wider">运算说明</span>
+                系统每秒自动重算投影。若 K 线显示异常，请点击上方“强制刷新数据”重新连接 DEX 流动性池。
               </p>
             </div>
           </aside>
 
-          {/* Main Content Area */}
+          {/* Main Area */}
           <main className="lg:col-span-3 space-y-8">
             
-            {/* Summary Grid */}
+            {/* Quick Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { label: '预估资产价值', value: `$${summary?.totalValue.toFixed(2) || '0.00'}`, color: 'text-white' },
-                { label: '累计利润', value: `${(summary?.profit || 0) >= 0 ? '+' : ''}$${summary?.profit.toFixed(2) || '0.00'}`, color: (summary?.profit || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500' },
-                { label: '持币增值倍数', value: `${summary?.multiplier.toFixed(2) || '1.00'}x`, color: 'text-cyan-400' },
-                { label: '当前预估日收益', value: `+$${summary?.dailyEst.toFixed(2) || '0.00'}`, color: 'text-emerald-500' },
+                { label: '预估总资产', value: `$${summary?.totalValue.toFixed(2) || '0.00'}`, color: 'text-white' },
+                { label: '净利润', value: `${(summary?.profit || 0) >= 0 ? '+' : ''}$${summary?.profit.toFixed(2) || '0.00'}`, color: (summary?.profit || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500' },
+                { label: '增长倍数', value: `${summary?.multiplier.toFixed(2) || '1.00'}x`, color: 'text-cyan-400' },
+                { label: '日均收益', value: `+$${summary?.dailyEst.toFixed(2) || '0.00'}`, color: 'text-emerald-500' },
               ].map((item, i) => (
-                <div key={i} className="glass rounded-3xl p-6 border border-white/5 hover:border-emerald-500/10 transition-all shadow-lg">
-                  <p className="text-[9px] text-slate-500 font-black uppercase mb-1.5 tracking-[0.2em]">{item.label}</p>
+                <div key={i} className="glass rounded-3xl p-6 border border-white/5 shadow-lg">
+                  <p className="text-[9px] text-slate-500 font-black uppercase mb-2 tracking-widest">{item.label}</p>
                   <p className={`text-2xl font-mono font-bold tracking-tighter ${item.color}`}>
                     {item.value}
                   </p>
@@ -234,39 +233,38 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Chart Area */}
-            <div className="glass rounded-[3rem] p-10 h-[580px] border border-white/5 flex flex-col shadow-2xl relative">
-              <div className="flex items-center justify-between mb-8">
+            {/* Chart */}
+            <div className="glass rounded-[3rem] p-10 h-[600px] border border-white/5 flex flex-col shadow-2xl relative">
+              <div className="flex items-center justify-between mb-10">
                 <div className="space-y-1">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">收益复合增长动态投影曲线</h3>
-                  <p className="text-[9px] text-slate-600 font-mono uppercase">Data Source: GeckoTerminal OHLCV Feed</p>
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Yield Growth Dynamics</h3>
+                  <p className="text-[9px] text-slate-600 font-mono uppercase">Compound Interest Simulation based on DEX historical data</p>
                 </div>
-                {error && <span className="text-rose-400 text-[10px] font-black uppercase bg-rose-400/10 px-4 py-1.5 rounded-full animate-pulse">{error}</span>}
+                {error && <span className="text-rose-500 text-[10px] font-black uppercase bg-rose-500/10 px-4 py-1.5 rounded-full">{error}</span>}
               </div>
               
-              <div className="flex-grow w-full relative">
+              <div className="flex-grow w-full">
                 {results.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart 
-                      key={`${investment}-${startDate}-${annualYield}-${refreshing}`} // 强制参数变化时重绘以确保动画流畅
+                      key={`${safeInvestment}-${startDate}-${safeYield}-${refreshing}`}
                       data={results} 
-                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                      margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
                     >
                       <defs>
                         <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
                           <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.5} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} opacity={0.3} />
                       <XAxis 
                         dataKey="date" 
                         stroke="#475569" 
                         fontSize={10} 
                         axisLine={false} 
                         tickLine={false} 
-                        dy={12}
-                        minTickGap={40}
+                        dy={15}
                         fontFamily="monospace"
                       />
                       <YAxis 
@@ -277,28 +275,22 @@ const App: React.FC = () => {
                         domain={['auto', 'auto']} 
                         tickFormatter={(v) => `$${v.toFixed(0)}`}
                         fontFamily="monospace"
-                        width={40}
                       />
                       <Tooltip 
-                        cursor={{ stroke: '#10b981', strokeWidth: 1.5, strokeDasharray: '4 4' }}
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const d = payload[0].payload;
                             return (
-                              <div className="bg-slate-900/95 border border-emerald-500/40 p-5 rounded-2xl shadow-2xl backdrop-blur-xl">
-                                <p className="text-[10px] text-emerald-500 font-black mb-3 uppercase tracking-widest border-b border-white/5 pb-2">{d.fullDate}</p>
+                              <div className="bg-slate-900 border border-emerald-500/30 p-5 rounded-2xl shadow-3xl backdrop-blur-xl">
+                                <p className="text-[10px] text-emerald-500 font-black mb-3 border-b border-white/5 pb-2 uppercase tracking-widest">{d.fullDate}</p>
                                 <div className="space-y-2">
-                                  <div className="flex justify-between gap-8 items-center">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">资产净值</span>
-                                    <span className="text-sm font-mono font-black text-white">${d.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                  <div className="flex justify-between gap-10">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Total Asset</span>
+                                    <span className="text-sm font-mono font-black text-white">${d.usdValue.toFixed(2)}</span>
                                   </div>
-                                  <div className="flex justify-between gap-8 items-center">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">市场币价</span>
-                                    <span className="text-xs font-mono text-slate-300">${d.price.toFixed(4)}</span>
-                                  </div>
-                                  <div className="flex justify-between gap-8 items-center">
-                                    <span className="text-[10px] text-slate-500 uppercase font-bold">增长系数</span>
-                                    <span className="text-xs font-mono text-cyan-400 font-bold">{d.multiplier.toFixed(2)}x</span>
+                                  <div className="flex justify-between gap-10">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold">Token Price</span>
+                                    <span className="text-xs font-mono text-slate-400">${d.price.toFixed(4)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -313,26 +305,18 @@ const App: React.FC = () => {
                         stroke="#10b981" 
                         strokeWidth={3} 
                         fill="url(#curveFill)" 
-                        isAnimationActive={true}
-                        animationDuration={1000}
-                        animationEasing="ease-in-out"
+                        animationDuration={1200}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 border-2 border-slate-800 border-t-emerald-500/40 rounded-full animate-spin mb-6"></div>
-                    <p className="text-xs font-mono uppercase tracking-[0.4em] text-slate-600 animate-pulse">Computing Yield Vectors...</p>
+                    <div className="w-16 h-16 border-2 border-slate-800 border-t-emerald-500/50 rounded-full animate-spin mb-6"></div>
+                    <p className="text-xs font-mono uppercase tracking-[0.4em] text-slate-700">Awaiting Simulation Feed...</p>
                   </div>
                 )}
               </div>
             </div>
-
-            <footer className="text-center py-4">
-              <p className="text-[8px] text-slate-700 font-black uppercase tracking-[0.5em]">
-                Polygon Mainnet · LGNS/USDT Pool · 2025 Financial Modeling Tool
-              </p>
-            </footer>
           </main>
         </div>
       </div>

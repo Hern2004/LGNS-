@@ -24,8 +24,9 @@
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
       
+      /* 修复图表在部分浏览器下高度坍塌的问题 */
       .recharts-responsive-container {
-        min-height: 350px;
+        min-height: 400px;
       }
     </style>
   <script type="importmap">
@@ -43,7 +44,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- 依赖由 Vite 通过 package.json 自动管理，不再使用 importmap -->
+    <!-- 由 Vite 自动管理模块，不再手动配置 importmap -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
