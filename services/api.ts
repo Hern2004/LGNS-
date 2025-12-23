@@ -1,42 +1,52 @@
 
-import { OKX_DEX_API_BASE, GECKO_TERMINAL_API_BASE, OKX_CHAIN_ID } from '../constants';
+import { GECKO_TERMINAL_API_BASE, DEFAULT_PLATFORM_ID } from '../constants';
 import { PriceData, TokenStats } from '../types';
 
 /**
- * 通过 OKX DEX 接口获取实时价格 (国内最快、最稳定)
+ * 获取实时价格及统计数据 - 切换为 GeckoTerminal 以解决 CORS 报错
  */
 export const fetchCurrentPrice = async (address: string): Promise<TokenStats> => {
   try {
-    // OKX 的这个接口专为前端聚合器设计，国内访问延迟极低
-    const url = `${OKX_DEX_API_BASE}?chainId=${OKX_CHAIN_ID}&tokenAddress=${address}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("OKX API Offline");
+    // 接口文档: https://www.geckoterminal.com/dex-api
+    const url = `${GECKO_TERMINAL_API_BASE}/networks/${DEFAULT_PLATFORM_ID}/tokens/${address}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json;version=20230302'
+      }
+    });
+    
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const json = await response.json();
-    const data = json.data;
+    const attributes = json.data?.attributes;
 
-    if (!data) throw new Error("Token not found on OKX DEX");
+    if (!attributes) throw new Error("Token data not found in response");
 
     return {
-      currentPrice: parseFloat(data.priceUsd) || 0,
-      priceChange24h: parseFloat(data.priceChange24h) ?? 0,
-      marketCap: parseFloat(data.fdv) ?? 0,
-      volume24h: parseFloat(data.volume24h) ?? 0,
+      currentPrice: parseFloat(attributes.price_usd) || 0,
+      priceChange24h: parseFloat(attributes.price_change_percentage?.h24) || 0,
+      marketCap: parseFloat(attributes.fdv_usd) || 0,
+      volume24h: parseFloat(attributes.total_volume_usd) || 0,
     };
   } catch (error) {
-    console.warn("OKX Fetch Error, trying fallback:", error);
-    // 如果 OKX 出错，返回默认空值，App.tsx 会有处理逻辑
+    console.error("GeckoTerminal Price Fetch Error:", error);
+    // 发生错误时返回零值，避免应用崩溃
     return { currentPrice: 0, priceChange24h: 0, marketCap: 0, volume24h: 0 };
   }
 };
 
 /**
- * 获取历史 OHLCV 数据 (回测专用)
+ * 获取历史数据
  */
 export const fetchHistoricalData = async (platform: string, address: string): Promise<PriceData[]> => {
   try {
+    // 首先获取代币的交易对(Pool)
     const poolsUrl = `${GECKO_TERMINAL_API_BASE}/networks/${platform}/tokens/${address}/pools`;
-    const poolsResponse = await fetch(poolsUrl);
+    const poolsResponse = await fetch(poolsUrl, {
+      headers: { 'Accept': 'application/json;version=20230302' }
+    });
+    
     if (!poolsResponse.ok) return [];
     
     const poolsJson = await poolsResponse.json();
@@ -44,20 +54,26 @@ export const fetchHistoricalData = async (platform: string, address: string): Pr
     if (!topPool) return [];
 
     const poolAddress = topPool.attributes.address;
-    const historyUrl = `${GECKO_TERMINAL_API_BASE}/networks/${platform}/pools/${poolAddress}/ohlcv/day?limit=365`;
-    const response = await fetch(historyUrl);
+    
+    // 获取 OHLCV 历史数据（天维度）
+    const historyUrl = `${GECKO_TERMINAL_API_BASE}/networks/${platform}/pools/${poolAddress}/ohlcv/day?limit=180`;
+    const response = await fetch(historyUrl, {
+      headers: { 'Accept': 'application/json;version=20230302' }
+    });
+    
     if (!response.ok) return [];
 
     const data = await response.json();
     const ohlcvList = data.data.attributes.ohlcv_list;
 
+    // item[0] 是时间戳，item[4] 是收盘价
     return ohlcvList.map((item: any) => ({
       timestamp: item[0] * 1000,
       price: parseFloat(item[4]),
     })).sort((a: any, b: any) => a.timestamp - b.timestamp);
     
   } catch (error) {
-    console.error("Historical Data Error:", error);
+    console.warn("History Data Fetch Error:", error);
     return [];
   }
 };
