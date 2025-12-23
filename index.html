@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>LGNS Pro | 计算器</title>
-    <!-- 使用国内镜像源加载 Tailwind -->
+    <!-- 使用国内最稳定的静态资源镜像 baomitu -->
     <script src="https://lib.baomitu.com/tailwindcss/3.4.1/tailwind.min.js"></script>
     <style>
       body {
@@ -20,12 +20,17 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
-      .glow-emerald {
-        box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
-      }
       input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+      
+      @keyframes pulse-subtle {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+      .animate-pulse-subtle {
+        animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
     </style>
   <script type="importmap">
 {
@@ -42,7 +47,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- 显式引入入口文件 -->
+    <!-- Vite 将以此为入口，打包所有依赖 -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

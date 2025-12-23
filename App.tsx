@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, ComposedChart } from 'recharts';
 import { fetchCurrentPrice, fetchHistoricalData } from './services/api';
@@ -29,7 +30,7 @@ const App: React.FC = () => {
       setStats(currentStats);
       setHistoricalPrices(history);
     } catch (err) {
-      console.error("Node error:", err);
+      console.error("Fetch Error:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -49,10 +50,8 @@ const App: React.FC = () => {
     
     return relevantPrices.map((point, index) => {
       const currentTokens = initialTokens * Math.pow(1 + dailyYieldRate, index);
-      // Create a Date object once to avoid multiple new Date() calls
       const dateObj = new Date(point.timestamp);
       return {
-        // Fix: Manually format to MM-dd to avoid invalid toLocaleDateString options
         date: `${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`,
         fullDate: dateObj.toLocaleDateString('zh-CN'),
         price: point.price,
@@ -80,155 +79,136 @@ const App: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#020617]">
         <div className="flex flex-col items-center">
-          <div className="w-16 h-16 border-b-2 border-emerald-500 rounded-full animate-spin"></div>
-          <p className="mt-6 text-emerald-500/80 font-mono text-sm tracking-widest animate-pulse uppercase">Syncing Node...</p>
+          <div className="w-16 h-16 border-t-2 border-emerald-500 rounded-full animate-spin"></div>
+          <p className="mt-6 text-emerald-500 font-mono text-sm tracking-widest animate-pulse uppercase">Local Node Initializing...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-300 p-3 md:p-8 selection:bg-emerald-500/30">
-      <div className="max-w-7xl mx-auto space-y-5">
+    <div className="min-h-screen bg-[#020617] text-slate-300 p-3 md:p-6 lg:p-10 selection:bg-emerald-500/30">
+      <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Top Navigation / Stats Bar */}
-        <header className="glass rounded-3xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <span className="text-slate-950 font-black text-2xl">L</span>
+        {/* Top Header */}
+        <header className="glass rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl border border-white/5">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 bg-gradient-to-br from-emerald-400 to-emerald-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <span className="text-slate-950 font-black text-3xl">L</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">LGNS <span className="text-emerald-500">PRO</span></h1>
-              <p className="text-[10px] text-emerald-500/60 font-mono uppercase tracking-widest">OKX Fast-Node Connected</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-black text-white tracking-tight">LGNS CALCULATOR</h1>
+                <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 font-black border border-emerald-500/20">LOCAL v1.1</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <p className="text-[10px] text-emerald-500/60 font-mono uppercase tracking-widest">Local Mode: No VPN Required</p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8 bg-slate-900/40 p-3 px-6 rounded-2xl border border-white/5">
             <div className="text-center md:text-right">
-              <p className="text-[9px] text-slate-500 uppercase font-black">Current Price (DEX)</p>
-              <p className="text-2xl font-mono font-bold text-emerald-400 tracking-tighter">
+              <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-0.5">Live Price</p>
+              <p className="text-3xl font-mono font-bold text-emerald-400 tracking-tighter">
                 ${stats?.currentPrice.toFixed(4) || "---"}
               </p>
             </div>
             <button 
               onClick={loadData}
-              className="p-3 glass rounded-2xl hover:bg-slate-800 transition-colors group"
-              title="Refresh Data"
+              className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl transition-all group border border-emerald-500/20"
             >
-              <svg className={`w-5 h-5 text-slate-400 group-hover:text-white ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <svg className={`w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
           </div>
         </header>
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* Controls Sidebar */}
-          <aside className="lg:col-span-3 space-y-5">
-            <div className="glass rounded-[2rem] p-6 space-y-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Simulator Config</h2>
-              </div>
+          {/* Controls */}
+          <aside className="lg:col-span-3 space-y-6">
+            <div className="glass rounded-[2.5rem] p-7 space-y-7 border border-white/5">
+              <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_#10b981]"></span>
+                Parameter Tuning
+              </h2>
 
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Principal (USDT)</label>
-                  <div className="relative">
+              <div className="space-y-6">
+                <div className="space-y-2.5">
+                  <label className="text-[10px] text-slate-400 font-black uppercase ml-1 tracking-wider">Initial Capital (USDT)</label>
+                  <div className="relative group">
                     <input 
                       type="number" 
                       value={investment} 
                       onChange={(e) => setInvestment(Number(e.target.value))}
-                      className="w-full bg-slate-900/50 rounded-2xl px-4 py-3 font-mono text-lg text-white border border-slate-800 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 outline-none transition-all"
+                      className="w-full bg-slate-950/50 rounded-2xl px-5 py-4 font-mono text-xl text-white border border-white/10 group-hover:border-emerald-500/30 focus:border-emerald-500 outline-none transition-all shadow-inner"
                     />
-                    <span className="absolute right-4 top-3.5 text-[10px] text-slate-600 font-bold">USD</span>
+                    <span className="absolute right-5 top-5 text-[10px] text-slate-600 font-black">USD</span>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Target APR (%)</label>
-                  <div className="relative">
+                <div className="space-y-2.5">
+                  <label className="text-[10px] text-slate-400 font-black uppercase ml-1 tracking-wider">Expected APR (%)</label>
+                  <div className="relative group">
                     <input 
                       type="number" 
                       value={annualYield} 
                       onChange={(e) => setAnnualYield(Number(e.target.value))}
-                      className="w-full bg-slate-900/50 rounded-2xl px-4 py-3 font-mono text-lg text-emerald-400 border border-slate-800 focus:border-emerald-500/50 outline-none transition-all"
+                      className="w-full bg-slate-950/50 rounded-2xl px-5 py-4 font-mono text-xl text-emerald-400 border border-white/10 group-hover:border-emerald-500/30 focus:border-emerald-500 outline-none transition-all shadow-inner"
                     />
-                    <span className="absolute right-4 top-3.5 text-[10px] text-emerald-900 font-bold">%</span>
+                    <span className="absolute right-5 top-5 text-[10px] text-emerald-800 font-black">%</span>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase ml-1">Start From</label>
+                <div className="space-y-2.5">
+                  <label className="text-[10px] text-slate-400 font-black uppercase ml-1 tracking-wider">History Start Date</label>
                   <input 
                     type="date" 
                     value={startDate} 
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-slate-900/50 rounded-2xl px-4 py-3 font-mono text-sm text-slate-300 border border-slate-800 focus:border-emerald-500/50 outline-none transition-all"
+                    className="w-full bg-slate-950/50 rounded-2xl px-5 py-4 font-mono text-sm text-slate-300 border border-white/10 focus:border-emerald-500 outline-none transition-all shadow-inner"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-6 rounded-[2rem] bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/10 relative overflow-hidden group">
-              <div className="absolute -right-2 -bottom-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M13 2.05v2.02c4.39.54 7.5 4.53 6.96 8.92-.46 3.73-3.23 6.5-6.96 6.96v2.02c5.5-.55 9.5-5.31 8.95-10.81-.46-4.63-4.13-8.29-8.76-8.76zM11 2.05c-5.05.5-9.14 4.59-9.64 9.64H11V2.05zM2.31 13c.5 5.05 4.59 9.14 9.64 9.64V13H2.31z"/></svg>
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-400 relative z-10">
-                <strong className="text-emerald-500 font-black block mb-1">复利模型说明</strong>
-                该模型模拟每日收益自动复投。1000% APR 意味着每日增长约 <span className="text-white">0.66%</span>。高复利在长期持有中能极大对冲币价波动的负面影响。
+            <div className="p-7 rounded-[2.5rem] bg-emerald-500/5 border border-emerald-500/10 shadow-inner group">
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                <strong className="text-emerald-500 font-black block mb-2 tracking-wide uppercase">数学模型原理</strong>
+                模拟日复利增长。1000% 年化等于日增 <span className="text-white">~0.66%</span>。模型逻辑：资产 = (投资额 / 初始价) * (1 + 日利)<sup>天数</sup> * 当前价。
               </p>
             </div>
           </aside>
 
-          {/* Visualization & Stats */}
-          <main className="lg:col-span-9 space-y-5">
+          {/* Visualization */}
+          <main className="lg:col-span-9 space-y-6">
             
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="glass rounded-[2rem] p-5 shadow-lg glow-emerald">
-                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Total Assets</p>
-                <p className="text-xl md:text-2xl font-mono font-bold text-white tracking-tighter">
-                  ${summary?.totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
-              </div>
-              <div className="glass rounded-[2rem] p-5 shadow-lg">
-                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Net Profit</p>
-                <p className={`text-xl md:text-2xl font-mono font-bold tracking-tighter ${summary?.netProfitUsd! >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
-                  {summary?.netProfitUsd! >= 0 ? '+' : ''}{summary?.netProfitUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
-              </div>
-              <div className="glass rounded-[2rem] p-5 shadow-lg">
-                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Token Multiplier</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl md:text-2xl font-mono font-bold text-cyan-400 tracking-tighter">
-                    {summary?.multiplier.toFixed(2)}x
-                  </span>
-                  <span className="text-[9px] text-slate-600 font-black bg-slate-800 px-1.5 py-0.5 rounded">AUTO</span>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+              {[
+                { label: 'Estimated Total', value: `$${summary?.totalUsdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, color: 'text-white' },
+                { label: 'Net Profit', value: `${summary?.netProfitUsd! >= 0 ? '+' : ''}$${summary?.netProfitUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, color: summary?.netProfitUsd! >= 0 ? 'text-emerald-400' : 'text-rose-500' },
+                { label: 'Token Multiplier', value: `${summary?.multiplier.toFixed(2)}x`, color: 'text-cyan-400' },
+                { label: 'Daily Yield (est)', value: `+$${summary?.dailyEst.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, color: 'text-emerald-500' },
+              ].map((item, i) => (
+                <div key={i} className="glass rounded-[2rem] p-6 shadow-xl border border-white/5 hover:border-emerald-500/20 transition-colors">
+                  <p className="text-[10px] text-slate-500 font-black uppercase mb-1.5 tracking-widest">{item.label}</p>
+                  <p className={`text-2xl font-mono font-bold tracking-tighter ${item.color}`}>
+                    {item.value}
+                  </p>
                 </div>
-              </div>
-              <div className="glass rounded-[2rem] p-5 shadow-lg">
-                <p className="text-[9px] text-slate-500 font-black uppercase mb-1">Daily Earnings</p>
-                <p className="text-xl md:text-2xl font-mono font-bold text-emerald-500 tracking-tighter">
-                  +${summary?.dailyEst.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                </p>
-              </div>
+              ))}
             </div>
 
-            {/* Main Chart */}
-            <div className="glass rounded-[2.5rem] p-6 md:p-8 h-[500px] shadow-2xl relative">
-              <div className="flex items-center justify-between absolute top-8 left-8 right-8 z-10 pointer-events-none">
-                <div>
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Growth Forecast</h3>
-                  <p className="text-[10px] text-slate-500 mt-1 font-mono">Performance over selected timeframe</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span className="text-[9px] text-slate-400 uppercase font-black">USD Value</span>
-                  </div>
+            {/* Chart Container */}
+            <div className="glass rounded-[3rem] p-8 md:p-10 h-[560px] shadow-2xl border border-white/5 relative overflow-hidden">
+              <div className="flex items-center justify-between absolute top-10 left-10 right-10 z-10 pointer-events-none">
+                <div className="bg-slate-950/20 p-2 px-4 rounded-xl backdrop-blur-sm border border-white/5">
+                  <h3 className="text-xs font-black text-white uppercase tracking-[0.2em]">Asset Growth Projection</h3>
+                  <p className="text-[9px] text-slate-500 mt-1 font-mono uppercase">Currency: USD Value</p>
                 </div>
               </div>
               
@@ -238,48 +218,50 @@ const App: React.FC = () => {
                     <ComposedChart data={results}>
                       <defs>
                         <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.15}/>
+                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.25}/>
                           <stop offset="100%" stopColor="#10b981" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="1 6" stroke="#1e293b" vertical={false} />
+                      <CartesianGrid strokeDasharray="1 10" stroke="#1e293b" vertical={false} />
                       <XAxis 
                         dataKey="date" 
                         stroke="#475569" 
-                        fontSize={10} 
+                        fontSize={11} 
                         axisLine={false} 
                         tickLine={false} 
-                        minTickGap={40}
-                        dy={10}
+                        minTickGap={50}
+                        dy={15}
+                        fontFamily="monospace"
                       />
                       <YAxis 
                         stroke="#10b981" 
-                        fontSize={10} 
+                        fontSize={11} 
                         axisLine={false} 
                         tickLine={false} 
                         tickFormatter={(v) => `$${v > 1000 ? (v/1000).toFixed(0)+'k' : v}`}
-                        width={40}
+                        width={50}
+                        fontFamily="monospace"
                       />
                       <Tooltip 
-                        cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '4 4' }}
+                        cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '5 5' }}
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const d = payload[0].payload;
                             return (
-                              <div className="glass !bg-slate-950/90 border border-emerald-500/20 p-4 rounded-2xl shadow-2xl">
-                                <p className="text-[10px] text-slate-500 font-black mb-2 uppercase">{d.fullDate}</p>
-                                <div className="space-y-1">
-                                  <div className="flex justify-between gap-8">
-                                    <span className="text-[10px] text-slate-400 uppercase">Value:</span>
-                                    <span className="text-xs font-mono font-bold text-white">${d.usdValue.toFixed(2)}</span>
+                              <div className="bg-slate-950/95 border border-emerald-500/30 p-5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-md">
+                                <p className="text-[10px] text-emerald-500 font-black mb-3 uppercase tracking-widest border-b border-emerald-500/10 pb-2">{d.fullDate}</p>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between gap-12 items-center">
+                                    <span className="text-[10px] text-slate-400 uppercase font-bold">Total USD</span>
+                                    <span className="text-sm font-mono font-black text-white">${d.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                   </div>
-                                  <div className="flex justify-between gap-8">
-                                    <span className="text-[10px] text-slate-400 uppercase">Balance:</span>
-                                    <span className="text-xs font-mono font-bold text-emerald-400">{d.tokenBalance.toFixed(0)}</span>
+                                  <div className="flex justify-between gap-12 items-center">
+                                    <span className="text-[10px] text-slate-400 uppercase font-bold">Holdings</span>
+                                    <span className="text-sm font-mono font-black text-emerald-400">{d.tokenBalance.toFixed(0)} LGNS</span>
                                   </div>
-                                  <div className="flex justify-between gap-8">
-                                    <span className="text-[10px] text-slate-400 uppercase">Multiplier:</span>
-                                    <span className="text-xs font-mono font-bold text-cyan-400">{d.multiplier.toFixed(2)}x</span>
+                                  <div className="flex justify-between gap-12 items-center">
+                                    <span className="text-[10px] text-slate-400 uppercase font-bold">Multiplier</span>
+                                    <span className="text-sm font-mono font-black text-cyan-400">{d.multiplier.toFixed(2)}x</span>
                                   </div>
                                 </div>
                               </div>
@@ -294,23 +276,27 @@ const App: React.FC = () => {
                         stroke="#10b981" 
                         strokeWidth={4} 
                         fill="url(#areaFill)" 
-                        animationDuration={1500}
+                        animationDuration={2000}
+                        animationEasing="ease-in-out"
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full w-full flex flex-col items-center justify-center opacity-50">
-                    <div className="w-10 h-10 border-t-2 border-slate-700 rounded-full animate-spin mb-4"></div>
-                    <p className="text-slate-600 font-black text-[10px] uppercase tracking-[0.4em]">Optimizing Nodes...</p>
+                  <div className="h-full w-full flex flex-col items-center justify-center">
+                    <div className="w-12 h-12 border-b-2 border-slate-700 rounded-full animate-spin mb-6"></div>
+                    <p className="text-slate-600 font-black text-xs uppercase tracking-[0.5em] animate-pulse">Syncing Chain Data...</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Footer / Disclaimer */}
-            <footer className="text-center py-4">
-              <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-                Data provided by OKX DEX Aggregator • Charts via Recharts v3
+            <footer className="text-center pt-2 pb-6">
+              <p className="text-[9px] text-slate-600 font-black uppercase tracking-[0.3em] flex items-center justify-center gap-4">
+                <span>DEX: OKX AGGREGATOR</span>
+                <span className="w-1 h-1 rounded-full bg-slate-800"></span>
+                <span>ENGINE: RECHARTS PRO</span>
+                <span className="w-1 h-1 rounded-full bg-slate-800"></span>
+                <span>STATUS: OPERATIONAL</span>
               </p>
             </footer>
 
